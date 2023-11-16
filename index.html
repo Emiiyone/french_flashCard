@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase_version9_RealtimeDB(G'sACADEMY初学者用サンプル)</title>
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.rawgit.com/mattdiamond/Recorderjs/08e7abd9/dist/recorder.js"></script>
+</head>
+
+<body>
+
+    <h1>単語メモ</h1>
+    <!-- コンテンツ表示画面 -->
+    <div>
+        <!-- 各場所にidを設定しましょう -->
+        <div>
+            <input id="uname" type="text" name="uname" placeholder="フランス語を入力してください">
+        </div>
+
+       
+        <button id="btn_yomu">発音</button>
+        <button id="btn_honyaku">翻訳</button>
+
+        <div>
+            <textarea id="text" placeholder="日本語訳"></textarea>
+        </div>
+        <button id="send">登録する</button>
+        <!-- style.cssに "overflow: auto;"を書いてみましょう！※最後に -->
+        <div id="output"></div>
+
+    </div>
+
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js";
+        import { getDatabase, ref, push, set, update, onChildAdded, onChildChanged, remove, onChildRemoved }
+            from "https://www.gstatic.com/firebasejs/9.1.0/firebase-database.js";
+
+
+        const firebaseConfig = {
+            apiKey: "",
+            authDomain: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: ""
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app); //RealtimeDBに接続
+        const dbRef = ref(db, "chat"); //RealtimeDB内の"chat"を使う
+
+        
+        // ボタンがクリックされたときの処理
+        $("#btn_yomu").click( function () {
+            const text = document.getElementById("uname").value;
+                 console.log(text,'最初の発音');
+                if ('speechSynthesis' in window) {  
+                    // 発言を設定
+                    const uttr = new SpeechSynthesisUtterance()
+                    uttr.text = text
+                    // 言語を設定
+                    uttr.lang = 'fr'
+
+                    // 仏語に対応しているvoiceを設定
+                    // const voices = speechSynthesis.getVoices()
+                    // console.log(voices,'出る音')
+                    //     for (let i = 0; i < voices.length; i++) {
+                    //         if (voices[i].lang === 'fr') {
+                    //             uttr.voice = voices[i]
+                    //         };
+                    //     };
+                        // 発言を再生
+                        window.speechSynthesis.speak(uttr)
+                    }; 
+            });
+
+        // ボタンがクリックされたときの処理
+        $("#btn_honyaku").click( function () {
+
+            const API_KEY = '' ;
+            const API_URL = '';
+            
+            const entext = document.getElementById("uname").value;
+                //console.log(entext);
+                let content = encodeURI('auth_key=' + API_KEY + '&text=' + entext + '&source_lang=FR&target_lang=JA');
+                let url = API_URL + '?' + content;
+
+            fetch(url)
+                 .then(function(response) {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error("Could not reach the API: " + response.statusText);
+                     }
+                }).then(function(data) {
+                     document.getElementById("text").value = data["translations"][0]["text"];
+                 }).catch(function(error) {
+                    document.getElementById("text").value = error.message;
+                });           
+        });
+
+
+
+        // function readAloud() {
+        //     // テキストを取得
+        //     const text = document.getElementById("text").value;
+        //     console.log(text);
+        //         if ('speechSynthesis' in window) {
+        //             // 発言を設定
+        //             const uttr = new SpeechSynthesisUtterance()
+        //             uttr.text = text
+        //             // 発言を再生
+        //             window.speechSynthesis.speak(uttr)
+        //         }; 
+        //     };
+
+
+        //データ登録(Click)
+            $('#send').on('click', function () {
+            const uname = $('#uname').val();
+            const text = $('#text').val();
+            
+            // const msg = {
+            //     uname : $('#uname').val(),
+            //     const : $('#text').val()
+            // }
+
+            const msg = {
+                uname: uname,
+                text: text,
+            }
+
+             //firebaseに
+            const newPostRef = push(dbRef);
+            set(newPostRef, msg);
+
+            $('#uname').val("");
+            $('#text').val("");
+
+            // この下は消さない
+        });
+        
+
+        //データ登録(Enter)
+
+        //最初にデータ取得＆onSnapshotでリアルタイムにデータを取得
+
+        onChildAdded(dbRef, function (data) {
+            const msg = data.val();
+            const key = data.key;
+            //console.log(msg,"塊");
+            //console.log(key,"鍵");
+            
+            // let html = `
+            //     <div class=${key}>
+            //         <p>${msg.uname}</p>
+            //         <p>${msg.text}</p>
+            //     </div>  
+            // `
+
+            let h = '<div id="'+key+'">';
+                h += '<p id="'+key+'_sound" class="uname">'+msg.uname+'</p>';
+                h += '<p contentEditable="true" id="'+key+'_update">'+msg.text+'</p>';
+                h += '<p class="sound" data-key="'+key+'">🔈</p>';
+                h += '<p class="remove" data-key="'+key+'">🚮</p>';
+                h += '<p class="update" data-key="'+key+'">🆙</p>';
+                h += '</div>';
+
+            // 画面に表示するために埋め込みます
+            //$('#output').append(html)
+            $('#output').prepend(h);
+
+        });
+
+        //削除イベント
+        $("#output").on("click", ".remove", function(){
+            const key = $(this).attr("data-key");
+            const remove_item = ref(db, "chat/"+key);
+            remove (remove_item);
+        });
+        //削除処理がFirebase側で実行されたらイベント発生！
+        onChildRemoved(dbRef, (data) => {
+            $("#"+data.key).remove();
+        });
+
+        //更新イベント
+        $("#output").on("click", ".update", function(){
+            const key = $(this).attr("data-key");
+            update(ref(db, "chat/"+key), {
+                text : $("#"+key+'_update').html()
+            });
+        });
+
+        //更新処理がFirebase側で実行されたらイベント発生！
+        onChildChanged(dbRef, (data) => {
+            $("#"+data.key+'_update').html(data.val().text);
+            $("#"+data.key+'_update').fadeOut(800).fadeIn(800);
+        });
+
+        //発音イベント
+        $("#output").on("click", ".sound", function(){
+           // const text = document.getElementById("uname").value;
+            const key = $(this).attr("data-key");
+            const sound = $("#"+key+'_sound').html();
+            //console.log(sound,'次の発音');
+            if ('speechSynthesis' in window) {  
+                    // 発言を設定
+                    const uttr2 = new SpeechSynthesisUtterance(sound)
+                    uttr2.sound = sound
+                    //console.log(uttr2.sound, "最後")
+                    // 言語を設定
+                    uttr2.lang = 'fr'
+
+                    // 仏語に対応しているvoiceを設定
+                    // const voices2 = speechSynthesis.getVoices()
+                    //     for (let i = 0; i < voices2.length; i++) {
+                    //         if (voices2[i].lang === 'fr') {
+                    //             uttr.voice2 = voices2[i]
+                    //         };
+                    //     };
+                    //     console.log(uttr.voices2,'出ない音')
+                        // 発言を再生
+                        window.speechSynthesis.speak(uttr2)
+                    };
+                    
+        });
+
+    </script>
+</body>
+
+</html>
